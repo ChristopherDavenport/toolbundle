@@ -36,11 +36,17 @@ The tools need nothing to be bundled. Parsing, running and the usage
 text are [`agenttool/cli`](https://pkg.go.dev/github.com/ChristopherDavenport/agenttool/cli)'s;
 this module adds the program around it and the skill.
 
+The same binary can also be the MCP server, for the hosts that take
+one: add the `mcp` command from the nested module
+[`toolbundle/mcp`](#serving-mcp-from-the-same-binary) and run
+`file-tools mcp`.
+
 ## The program
 
 ```
 <name> export-skill [--force] <dir>
 <name> version
+<name> <command of Bundle.Commands> [<arg>]...
 <name> [--ask] [--answer <reply>]... [--record <file>] [--out <dir>] <command> [--<param> <value>]... [<json> | -]
 <name> help [<command>]
 <name> schema <command>
@@ -61,11 +67,12 @@ this module adds the program around it and the skill.
   with `--answer`. A terminal does not say who is at it, so the
   default is the one that is safe for a model.
 
-`export-skill` and `version` are recognised only as the first
-argument. `Main` refuses to start, with exit 2, a bundle whose name is
-not a valid skill name, whose skill would not validate, which names a
-tool as a command of the program's own (`export-skill`, `version`,
-`help`, `schema`), or whose example does not parse. It stops a call on
+`export-skill`, `version` and the bundle's `Commands` are recognised
+only as the first argument. `Main` refuses to start, with exit 2, a
+bundle whose name is not a valid skill name, whose skill would not
+validate, which names a tool or a command as a command of the
+program's own (`export-skill`, `version`, `help`, `schema`, or one of
+`Commands`), or whose example does not parse. It stops a call on
 an interrupt, and closes the tools when it is done, whatever ran.
 
 ## Per-tool settings
@@ -110,6 +117,51 @@ set with no options.
 The skill's command lines name the bundle, so the binary must be
 installed under `Bundle.Name`; `export-skill` notes when it was run
 under another.
+
+## Serving MCP from the same binary
+
+`Bundle.Commands` adds program commands of the author's own. The
+nested module `github.com/ChristopherDavenport/toolbundle/mcp` has
+one, `mcp`, which serves the bundle's tools over MCP on stdin and
+stdout through
+[`agenttool/mcpserver`](https://pkg.go.dev/github.com/ChristopherDavenport/agenttool/mcpserver):
+
+```go
+import "github.com/ChristopherDavenport/toolbundle/mcp"
+
+os.Exit(toolbundle.Main(context.Background(), toolbundle.Bundle{
+	Name:        "file-tools",
+	Description: "…",
+	Tools:       []toolbundle.Tool{ … },
+	Commands:    []toolbundle.Command{mcp.Command()},
+}, os.Args))
+```
+
+```sh
+claude mcp add file-tools -- file-tools mcp   # a host that takes MCP
+file-tools export-skill ~/.claude/skills      # a host that does not
+```
+
+- It is a module of its own so that the MCP SDK reaches only the
+  programs that serve MCP. A bundle without the command carries none
+  of it, which matters where a host forbids MCP and reviews what it
+  installs.
+- It serves the tools the skill shows, named and versioned as the
+  bundle. A hidden tool is not served, since MCP has no tool a client
+  may call but not list. Questions are elicitations, progress is
+  notifications and records are `_meta`, as from any server built on
+  `mcpserver`.
+- One process serves the whole session, so a tool that keeps state
+  between calls keeps it over MCP. `export-skill` still warns about
+  such a tool, since the program loses the state.
+- It runs until the client closes stdin or the program is interrupted
+  or terminated, then the program closes the tools. It takes no
+  arguments, and nothing but the protocol goes to stdout.
+- The skill does not mention it. The model reaches the command line
+  through the skill and the server through the host's MCP
+  configuration, and a host uses one or the other.
+- `mcp.CommandWith(mcpserver.Options{…})` passes options to the
+  server.
 
 ## What pre-approval grants in Claude Code
 
@@ -164,8 +216,12 @@ another name, and where MCP is forbidden it would be a way around the
 policy rather than a way to follow it, so the bundle does not build
 one.
 
-Not in this version: an AGENTS.md index, an MCP mode, and a `--json`
-output envelope.
+That is a background process the bundle would start for itself. The
+`mcp` command is not one: the host starts it, as it starts any MCP
+server it allows, and a host that forbids MCP never does.
+
+Not in this version: an AGENTS.md index, an MCP transport other than
+stdio, and a `--json` output envelope.
 
 ## License
 

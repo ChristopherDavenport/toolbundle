@@ -22,13 +22,19 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go }}
+          # Nested modules have their own go.sum; cache all of them.
+          cache-dependency-path: |
+            go.sum
+            **/go.sum
       - name: Build
         run: make build
-      - name: Module depends on agenttool, agentskill and the standard library only
+      - name: Root module depends on agenttool, agentskill and the standard library only
         run: make deps
-      - name: Vet
+      - name: Every first-party require is replaced with the tree
+        run: make replaces
+      - name: Vet (root and nested modules)
         run: make vet
-      - name: Test
+      - name: Test (root and nested modules)
         run: make test
 
   lint:
@@ -39,21 +45,45 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: stable
+          cache-dependency-path: |
+            go.sum
+            **/go.sum
       - name: Check formatting
         run: make fmt
-      - name: Check go.mod and go.sum are tidy
+      - name: Check go.mod and go.sum are tidy in every module
         run: make tidy-check
       - name: staticcheck
         run: make lint
       - name: govulncheck
         run: make vuln
 
+  # The one job that resolves a nested module's require of the root.
+  # Every other job builds inside the tree, where the replace answers
+  # first and that line is never read; a consumer reads nothing else.
+  extracted:
+    name: Nested modules build extracted
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tags, so it can tell whether the tree is still the release
+          # a require names; see check-extracted.sh.
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            **/go.sum
+      - name: Every nested module builds against the version of the root it requires
+        run: make extracted
+
   # Single required status check for branch protection; it fails if any job
   # above failed, was cancelled or was skipped.
   checks:
     name: Checks
     if: always()
-    needs: [test, lint]
+    needs: [test, lint, extracted]
     runs-on: ubuntu-latest
     steps:
       - name: Verify every job succeeded
