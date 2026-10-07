@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"slices"
+	"strings"
 
 	"github.com/ChristopherDavenport/agentskill"
 	"github.com/ChristopherDavenport/agenttool"
@@ -30,10 +32,12 @@ var reserved = []string{cmdExportSkill, cmdVersion, "help", "schema"}
 //
 //	<name> export-skill [--force] <dir>
 //	<name> version
+//	<name> <command of Bundle.Commands> [<arg>]...
 //	<name> [--ask] <cli.Runner's command line>
 //
-// export-skill writes the skill to <dir>/<name>/SKILL.md, and version
-// prints the version. Anything else is one call of one tool, run by
+// export-skill writes the skill to <dir>/<name>/SKILL.md, version
+// prints the version, and a [Command] of the bundle's runs with the
+// words after its name. Anything else is one call of one tool, run by
 // [cli.Runner] with the exit statuses it documents. --ask, given first,
 // asks a person at the terminal any question a tool asks, through
 // [cli.Prompt]; without it a question takes cli's protocol for a
@@ -42,12 +46,12 @@ var reserved = []string{cmdExportSkill, cmdVersion, "help", "schema"}
 // one that is safe for a model.
 //
 // Before anything runs, Main refuses a bundle that could not export a
-// valid skill, a tool named as one of the program's commands, and an
-// example that does not parse, with [cli.ExitUsage]. It stops the call
-// on an interrupt, and closes the tools when it is done with
-// [agenttool.Set.Close], whatever ran; a failed close is reported on
-// stderr and leaves the exit status as it was, since the call has
-// already happened.
+// valid skill, a tool or a command named as one of the program's
+// commands, and an example that does not parse, with [cli.ExitUsage].
+// It stops the call or the command on an interrupt, and closes the
+// tools when it is done with [agenttool.Set.Close], whatever ran; a
+// failed close is reported on stderr and leaves the exit status as it
+// was, since the call has already happened.
 func Main(ctx context.Context, b Bundle, args []string) int {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
@@ -81,6 +85,12 @@ func (b Bundle) main(ctx context.Context, args []string, stdin io.Reader, stdout
 			fmt.Fprintf(stdout, "%s %s\n", b.Name, b.version())
 			return cli.ExitOK
 		}
+		for _, c := range b.Commands {
+			if c.Name == args[0] {
+				p := Program{Name: b.Name, Version: b.version(), Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
+				return c.Run(ctx, p, args[1:])
+			}
+		}
 	}
 
 	r := cli.Runner{Name: b.Name, Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
@@ -108,6 +118,23 @@ func (b Bundle) check(ctx context.Context) error {
 		for _, r := range reserved {
 			if t.tool.Name() == r {
 				return fmt.Errorf("a tool is named %q, which is a command of the program's own", r)
+			}
+		}
+	}
+	for i, c := range b.Commands {
+		switch {
+		case c.Name == "" || strings.HasPrefix(c.Name, "-"):
+			return fmt.Errorf("command %d is named %q, which is not a word that can run it", i, c.Name)
+		case c.Run == nil:
+			return fmt.Errorf("command %q has no Run", c.Name)
+		case slices.Contains(reserved, c.Name):
+			return fmt.Errorf("a command is named %q, which is a command of the program's own", c.Name)
+		case slices.ContainsFunc(b.Commands[:i], func(o Command) bool { return o.Name == c.Name }):
+			return fmt.Errorf("two commands are named %q", c.Name)
+		}
+		for _, t := range b.Tools {
+			if t.tool.Name() == c.Name {
+				return fmt.Errorf("a tool is named %q, which is a command of the program's own", c.Name)
 			}
 		}
 	}

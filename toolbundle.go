@@ -25,9 +25,17 @@
 // persistent shell or a container session, loses it at exit. Such a
 // tool is better left out of the bundle; export-skill warns about one
 // that looks like it, unless [Stateful] says the author knows.
+//
+// A [Command] adds a program command of the author's own. The nested
+// module github.com/ChristopherDavenport/toolbundle/mcp has one that
+// serves the same tools over MCP, so one binary is both the program
+// and the server, while a bundle without it carries no MCP code.
 package toolbundle
 
 import (
+	"context"
+	"io"
+
 	"github.com/ChristopherDavenport/agenttool"
 )
 
@@ -50,6 +58,41 @@ type Bundle struct {
 	// Tools are the program's commands, in the order the skill lists
 	// them.
 	Tools []Tool
+	// Commands are program commands of the author's own, beside
+	// export-skill and version, such as the mcp command of
+	// github.com/ChristopherDavenport/toolbundle/mcp. They are left out
+	// of the skill and help.
+	Commands []Command
+}
+
+// A Command is a program command of the author's own. Like
+// export-skill and version, it is recognised only as the first
+// argument, and its name may be neither one of the program's own nor
+// a tool's. It runs after the startup checks and before the tools are
+// closed, so it may hold them for as long as it runs: a server serving
+// many calls in one process, in which a stateful tool keeps its state.
+type Command struct {
+	// Name is the word that runs the command.
+	Name string
+	// Run runs the command with the words after its name, and returns
+	// the exit status, with cli's meanings: [cli.ExitUsage] for a
+	// command line it refuses.
+	Run func(ctx context.Context, p Program, args []string) int
+}
+
+// Program is the bundle as a [Command] runs it.
+type Program struct {
+	// Name is the bundle's name.
+	Name string
+	// Version is the bundle's version, or the main module's when it
+	// sets none, as the version command prints it.
+	Version string
+	// Tools are the tools the skill shows, the hidden ones left out.
+	// The program closes them after the command returns.
+	Tools agenttool.Set
+	// Stdin, Stdout and Stderr are the program's standard streams.
+	Stdin          io.Reader
+	Stdout, Stderr io.Writer
 }
 
 // Tool is a tool in a bundle, with what the bundle needs to know about

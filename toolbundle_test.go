@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"flag"
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,6 +101,21 @@ func fileTools() Bundle {
 			Use(reindex(), Hidden()),
 		},
 	}
+}
+
+// serve is a program command that prints what it was given and exits
+// with status.
+func serve(status int) Command {
+	return Command{Name: "serve", Run: func(ctx context.Context, p Program, args []string) int {
+		in, _ := io.ReadAll(p.Stdin)
+		var names []string
+		for _, t := range p.Tools {
+			names = append(names, t.Name())
+		}
+		fmt.Fprintf(p.Stdout, "%s %s %s %q %q\n", p.Name, p.Version, strings.Join(names, ","), args, in)
+		fmt.Fprintln(p.Stderr, "serving")
+		return status
+	}}
 }
 
 type result struct {
@@ -289,6 +306,13 @@ func TestStartupRefuses(t *testing.T) {
 		{"example with a redirection", Bundle{Name: "t", Description: "d", Tools: withExample("read_file --path x > y")}, `'>' must be quoted`},
 		{"example asking for help", Bundle{Name: "t", Description: "d", Tools: withExample("read_file --help")}, "not a call"},
 		{"example with bad JSON", Bundle{Name: "t", Description: "d", Tools: withExample("read_file '{path}'")}, "JSON"},
+		{"command with no name", Bundle{Name: "t", Description: "d", Commands: []Command{{Run: serve(0).Run}}}, "command 0"},
+		{"command named as an option", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "--mcp", Run: serve(0).Run}}}, `"--mcp"`},
+		{"command with no Run", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "serve"}}}, "no Run"},
+		{"command named version", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "version", Run: serve(0).Run}}}, `"version"`},
+		{"command named help", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "help", Run: serve(0).Run}}}, `"help"`},
+		{"two commands of one name", Bundle{Name: "t", Description: "d", Commands: []Command{serve(0), serve(1)}}, `two commands are named "serve"`},
+		{"tool named as a command", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("serve"), Hidden())}, Commands: []Command{serve(0)}}, `a tool is named "serve"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -358,6 +382,50 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunCommand(t *testing.T) {
+	b := fileTools()
+	b.Commands = []Command{serve(cli.ExitOK), {Name: "fail", Run: serve(cli.ExitFailed).Run}}
+	tests := []struct {
+		name   string
+		stdin  string
+		args   []string
+		status int
+		stdout string
+		stderr string
+	}{
+		{name: "a command", stdin: "in", args: []string{"serve", "--port", "1"}, stdout: `file-tools v1.2.3 read_file,search,write_file ["--port" "1"] "in"` + "\n", stderr: "serving\n"},
+		{name: "its status", args: []string{"fail"}, status: cli.ExitFailed, stdout: "file-tools v1.2.3", stderr: "serving\n"},
+		{name: "first only", args: []string{"--out", "x", "serve"}, status: cli.ExitUsage, stderr: `unknown command "serve"`},
+		{name: "not a tool", args: []string{"schema", "serve"}, status: cli.ExitUsage},
+		{name: "tools still run", args: []string{"read_file", "--path", "go.mod"}, stdout: "read go.mod"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := run(t, b, tt.stdin, tt.args...)
+			if r.status != tt.status {
+				t.Fatalf("status %d, want %d\nstdout: %s\nstderr: %s", r.status, tt.status, r.stdout, r.stderr)
+			}
+			if !strings.Contains(r.stdout, tt.stdout) {
+				t.Errorf("stdout %q does not hold %q", r.stdout, tt.stdout)
+			}
+			if !strings.Contains(r.stderr, tt.stderr) {
+				t.Errorf("stderr %q does not hold %q", r.stderr, tt.stderr)
+			}
+		})
+	}
+
+	if r := run(t, b, "", "help"); strings.Contains(r.stdout, "serve") {
+		t.Errorf("help lists the command:\n%s", r.stdout)
+	}
+	dir := t.TempDir()
+	if r := run(t, b, "", "export-skill", dir); r.status != cli.ExitOK {
+		t.Fatalf("export-skill: %d %s", r.status, r.stderr)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "file-tools", "SKILL.md")); strings.Contains(string(data), "serve") {
+		t.Error("the skill names the command")
+	}
+}
+
 func TestMainClosesTheTools(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -369,6 +437,7 @@ func TestMainClosesTheTools(t *testing.T) {
 		{"a failed call", []string{"owner", "--bad"}, nil, cli.ExitUsage},
 		{"export-skill", []string{"export-skill", "DIR"}, nil, cli.ExitOK},
 		{"version", []string{"version"}, nil, cli.ExitOK},
+		{"a command", []string{"serve"}, nil, cli.ExitOK},
 		{"a failed close leaves the status", []string{"owner"}, errors.New("stuck"), cli.ExitOK},
 	}
 	for _, tt := range tests {
@@ -381,7 +450,7 @@ func TestMainClosesTheTools(t *testing.T) {
 			maint := agenttool.New("maint", "Maintenance.",
 				func(ctx context.Context, _ agenttool.NoArgs) (string, error) { return "ok", nil },
 				agenttool.WithCloser(hidden.close))
-			b := Bundle{Name: "owner", Description: "Owns.", Tools: []Tool{Use(owner, Stateful()), Use(maint, Hidden(), Stateful())}}
+			b := Bundle{Name: "owner", Description: "Owns.", Tools: []Tool{Use(owner, Stateful()), Use(maint, Hidden(), Stateful())}, Commands: []Command{serve(cli.ExitOK)}}
 			args := append([]string(nil), tt.args...)
 			for i, a := range args {
 				if a == "DIR" {
