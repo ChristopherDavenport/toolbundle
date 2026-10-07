@@ -5,7 +5,7 @@ All user-visible changes to this library. The format follows
 uses [Semantic Versioning](https://semver.org/); before v1.0.0 minor
 versions may break the API.
 
-## Unreleased
+## v0.0.2 - 2026-10-07
 
 - Added: `Bundle.Commands`, program commands of the author's own,
   recognised only as the first argument beside `export-skill` and

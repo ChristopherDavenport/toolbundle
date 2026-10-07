@@ -7,7 +7,7 @@ go 1.25.0
 // name a version the proxy does not serve yet. Consumers ignore the
 // replace and get the require; make extracted builds the module with
 // it dropped, the way a consumer does.
-require github.com/ChristopherDavenport/toolbundle v0.0.1
+require github.com/ChristopherDavenport/toolbundle v0.0.2
 
 require (
 	github.com/ChristopherDavenport/agenttool v0.0.18
