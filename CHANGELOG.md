@@ -20,6 +20,21 @@ versions may break the API.
   found the tools by their names alone. `mcpserver.Options.Instructions`
   given to `mcp.CommandWith` wins. `Program.Description` carries the
   description to a command.
+- Added: `<name> facts <command line>` prints what a call would touch,
+  the tool's facts claim, without running it, so a host that reads the
+  shell decides a bundle's call on what it touches as it would the same
+  tool in process or over MCP (#4). The command is agenttool `cli`'s
+  (`cli.Runner.Facts`, agenttool v0.0.29); a hidden tool answers it by
+  name, as it runs. `help` and the skill mark each command whose tool
+  makes a facts claim.
+- Added: `export-skill` warns when it pre-approves a tool that makes a
+  facts claim, since `allowed-tools` grants the command by name and a
+  host that honours it runs every call without deciding it on what it
+  touches. README's "What does not translate" says so.
+- Changed: `facts` is a command of the program's own, beside
+  `export-skill`, `version`, `help` and `schema`, so `Main` refuses to
+  start a bundle with a tool or a `Command` of that name. A breaking
+  change for such a bundle.
 - Dependencies: agenttool, agenttool/mcpserver and agenttool/mcpclient
   (a test-only dependency of `mcp`) v0.0.29, agentskill v0.0.12 and
   openresponses v0.0.17. The usage `cli` renders, and so the skill,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -58,10 +59,18 @@ func search() agenttool.Tool {
 		}, agenttool.WithAnnotations(agenttool.Annotations{ReadOnly: true}))
 }
 
+// writeFile claims facts: the file a call writes.
 func writeFile() agenttool.Tool {
 	return agenttool.New("write_file", "Write a file in the working tree.",
 		func(ctx context.Context, a writeArgs) (string, error) { return "wrote " + a.Path, nil },
-		agenttool.WithAnnotations(agenttool.Annotations{Destructive: true}))
+		agenttool.WithAnnotations(agenttool.Annotations{Destructive: true}),
+		agenttool.WithFacts(func(_ context.Context, args json.RawMessage) (agenttool.Facts, error) {
+			a, err := agenttool.Decode[writeArgs](args)
+			if err != nil {
+				return agenttool.Facts{}, err
+			}
+			return agenttool.Facts{Calls: []agenttool.FactCall{{Tool: "write", Args: args, Text: "write " + a.Path}}}, nil
+		}))
 }
 
 func reindex() agenttool.Tool {
@@ -242,6 +251,13 @@ func TestExportSkillWarns(t *testing.T) {
 		{"stateful", Use(shell(agenttool.WithSequential()), Stateful()), ""},
 		{"hidden still warns", Use(shell(agenttool.WithSequential()), Hidden()), "shell is sequential"},
 		{"plain", Use(shell()), ""},
+		{"pre-approved claiming facts", Use(shell(agenttool.WithFacts(func(context.Context, json.RawMessage) (agenttool.Facts, error) {
+			return agenttool.Facts{}, nil
+		})), PreApproved()), "shell is pre-approved and makes a facts claim"},
+		{"claiming facts", Use(shell(agenttool.WithFacts(func(context.Context, json.RawMessage) (agenttool.Facts, error) {
+			return agenttool.Facts{}, nil
+		}))), ""},
+		{"pre-approved", Use(shell(), PreApproved()), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -297,6 +313,7 @@ func TestStartupRefuses(t *testing.T) {
 		{"tool named export-skill", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("export-skill"))}}, `"export-skill"`},
 		{"tool named help", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("help"))}}, `"help"`},
 		{"tool named schema", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("schema"))}}, `"schema"`},
+		{"tool named facts", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("facts"))}}, `"facts"`},
 		{"two tools of one name", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("a")), Use(tool("a"), Hidden())}}, `"a"`},
 		{"example of an unknown flag", Bundle{Name: "t", Description: "d", Tools: withExample("read_file --file x")}, "file"},
 		{"example of a wrong type", Bundle{Name: "t", Description: "d", Tools: withExample("read_file --path x --max_bytes ten")}, "max_bytes"},
@@ -311,6 +328,7 @@ func TestStartupRefuses(t *testing.T) {
 		{"command with no Run", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "serve"}}}, "no Run"},
 		{"command named version", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "version", Run: serve(0).Run}}}, `"version"`},
 		{"command named help", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "help", Run: serve(0).Run}}}, `"help"`},
+		{"command named facts", Bundle{Name: "t", Description: "d", Commands: []Command{{Name: "facts", Run: serve(0).Run}}}, `"facts"`},
 		{"two commands of one name", Bundle{Name: "t", Description: "d", Commands: []Command{serve(0), serve(1)}}, `two commands are named "serve"`},
 		{"tool named as a command", Bundle{Name: "t", Description: "d", Tools: []Tool{Use(tool("serve"), Hidden())}, Commands: []Command{serve(0)}}, `a tool is named "serve"`},
 	}

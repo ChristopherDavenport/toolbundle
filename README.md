@@ -50,6 +50,7 @@ one: add the `mcp` command from the nested module
 <name> [--ask] [--answer <reply>]... [--record <file>] [--out <dir>] <command> [--<param> <value>]... [<json> | -]
 <name> help [<command>]
 <name> schema <command>
+<name> facts <command line>
 ```
 
 - `export-skill` writes the skill to `<dir>/<name>/SKILL.md`, since a
@@ -62,6 +63,14 @@ one: add the `mcp` command from the nested module
   0 success, 1 the tool's error, 2 a call that did not run, 3 a
   question nobody answered, 4 an `--answer` that did not fit its
   question.
+- `facts`, followed by a command line the program would run, prints
+  what that call would touch as one JSON object, the tool's facts
+  claim in the shape of an MCP `execution/facts` answer, without
+  running the tool. It is `cli`'s (`cli.Runner.Facts`), so a host that
+  reads the shell can decide a bundle's call on what it touches, as it
+  would the same tool in process or over MCP. `help` and the skill
+  mark each command whose tool makes the claim. A hidden tool answers
+  it, as it runs, by name.
 - `--ask`, given first, asks a person at the terminal any question a
   tool asks. Without it, a question ends the call with exit 3 and the
   question on stdout, for the caller to ask and run the call again
@@ -72,8 +81,8 @@ one: add the `mcp` command from the nested module
 only as the first argument. `Main` refuses to start, with exit 2, a
 bundle whose name is not a valid skill name, whose skill would not
 validate, which names a tool or a command as a command of the
-program's own (`export-skill`, `version`, `help`, `schema`, or one of
-`Commands`), or whose example does not parse. It stops a call on
+program's own (`export-skill`, `version`, `help`, `schema`, `facts`,
+or one of `Commands`), or whose example does not parse. It stops a call on
 an interrupt, and closes the tools when it is done, whatever ran.
 
 ## Per-tool settings
@@ -109,7 +118,11 @@ set with no options.
   command that is not hidden, each followed by its examples.
   [`testdata/skills/file-tools/SKILL.md`](testdata/skills/file-tools/SKILL.md)
   shows one.
-- `allowed-tools` lists the pre-approved commands.
+- `allowed-tools` lists the pre-approved commands. `export-skill`
+  warns about a pre-approved command whose tool makes a facts claim;
+  see [What does not translate](#what-does-not-translate).
+- A command whose tool makes a facts claim is marked in its section,
+  with the `facts` command line that answers it, as `cli` renders it.
 - `metadata` holds `version` and `digest`, the sha256 of the body,
   which is exactly what the model reads. No command line carries
   either: a stale skill fails a call with exit 2 and a pointer to
@@ -228,6 +241,14 @@ one.
 That is a background process the bundle would start for itself. The
 `mcp` command is not one: the host starts it, as it starts any MCP
 server it allows, and a host that forbids MCP never does.
+
+A pre-approval grants a command by name. A tool that makes a facts
+claim says what each call touches so that a policy can decide the call
+on it, and `<name> facts` gives that answer through the shell, but a
+host that honours `allowed-tools` runs every call of a pre-approved
+command without asking, whatever the call touches. `export-skill`
+warns when it pre-approves a claiming tool; leave `PreApproved` off a
+tool whose calls a policy should decide.
 
 Not in this version: an AGENTS.md index, an MCP transport other than
 stdio, and a `--json` output envelope.

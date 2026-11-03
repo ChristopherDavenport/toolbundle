@@ -3,7 +3,7 @@ name: file-tools
 description: Read, search and write files in the working tree. Use when a task needs the contents of a file or a change to one.
 allowed-tools: Bash(file-tools read_file *) Bash(file-tools search *)
 metadata:
-  digest: c6c7d85e14920682d1a4ec6d01d13c720b9913dbf5baec6a9950408437e365e6
+  digest: 6951a1e0b0198fd92f0f25b6406091498c6f19653054c655482c471e8c9d5acc
   version: v1.2.3
 ---
 
@@ -96,6 +96,8 @@ file-tools search --pattern 'func [A-Z]' --paths cmd --paths internal
 Write a file in the working tree.
 
 Hints from the tool: may be destructive.
+
+Makes a facts claim. `file-tools facts write_file ...`, with the rest of the command line, prints what the call would touch without running it.
 
 ```sh
 file-tools write_file --path <string> --content <string>
