@@ -60,7 +60,8 @@ one: add the `mcp` command from the nested module
   the build information when it sets none.
 - Anything else is one call of one tool, with `cli`'s exit statuses:
   0 success, 1 the tool's error, 2 a call that did not run, 3 a
-  question nobody answered.
+  question nobody answered, 4 an `--answer` that did not fit its
+  question.
 - `--ask`, given first, asks a person at the terminal any question a
   tool asks. Without it, a question ends the call with exit 3 and the
   question on stdout, for the caller to ask and run the call again
@@ -151,6 +152,10 @@ file-tools export-skill ~/.claude/skills      # a host that does not
   may call but not list. Questions are elicitations, progress is
   notifications and records are `_meta`, as from any server built on
   `mcpserver`.
+- It serves facts and replay to a client that dials with
+  `mcpclient.WithClaims()`, so a tool's facts claim reaches the
+  client's policy as it would in process; that needs mcpserver ≥
+  v0.0.20, and `mcp` requires a later one.
 - One process serves the whole session, so a tool that keeps state
   between calls keeps it over MCP. `export-skill` still warns about
   such a tool, since the program loses the state.

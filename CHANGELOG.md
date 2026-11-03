@@ -5,6 +5,20 @@ All user-visible changes to this library. The format follows
 uses [Semantic Versioning](https://semver.org/); before v1.0.0 minor
 versions may break the API.
 
+## Unreleased
+
+- Fixed: `mcp` required agenttool/mcpserver v0.0.18, which serves no
+  facts, so a tool's facts claim never reached an MCP client that takes
+  the server's claims, and the client decided its calls by name (#3).
+  It now requires v0.0.29, and a test serves a claiming tool to a
+  client dialling with `mcpclient.WithClaims()`, so a selection that
+  falls below v0.0.20 fails.
+- Dependencies: agenttool, agenttool/mcpserver and agenttool/mcpclient
+  (a test-only dependency of `mcp`) v0.0.29, agentskill v0.0.12 and
+  openresponses v0.0.17. The usage `cli` renders, and so the skill,
+  now gives exit status 4, an `--answer` that did not fit, and says
+  how to answer a form with a note.
+
 ## v0.0.2 - 2026-10-07
 
 - Added: `Bundle.Commands`, program commands of the author's own,
