@@ -87,7 +87,7 @@ func (b Bundle) main(ctx context.Context, args []string, stdin io.Reader, stdout
 		}
 		for _, c := range b.Commands {
 			if c.Name == args[0] {
-				p := Program{Name: b.Name, Version: b.version(), Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
+				p := Program{Name: b.Name, Version: b.version(), Description: b.Description, Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
 				return c.Run(ctx, p, args[1:])
 			}
 		}

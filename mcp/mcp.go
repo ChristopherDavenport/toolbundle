@@ -17,6 +17,10 @@
 // of it, which matters where a host forbids MCP and reviews what it
 // installs.
 //
+// The server's instructions are the bundle's description, the text the
+// skill's frontmatter carries, so a client finds the same guidance as
+// a model reading the skill.
+//
 // The server is [mcpserver]'s, so a tool reaches an MCP client as it
 // would from any server built on it: questions are elicitations,
 // progress is notifications and records are _meta. It serves the tools
@@ -56,14 +60,19 @@ func Command() toolbundle.Command {
 // the client closes stdin or the program is interrupted or terminated,
 // and exits with [cli.ExitOK]. A session that ends with an error
 // reports it on stderr and exits with [cli.ExitFailed]. Nothing but the
-// protocol is written to stdout.
+// protocol is written to stdout. The server's instructions are
+// o.Instructions, or the bundle's description when o gives none.
 func CommandWith(o mcpserver.Options) toolbundle.Command {
 	return toolbundle.Command{Name: Name, Run: func(ctx context.Context, p toolbundle.Program, args []string) int {
 		if len(args) > 0 {
 			fmt.Fprintf(p.Stderr, "%s: %s takes no arguments\n", p.Name, Name)
 			return cli.ExitUsage
 		}
-		srv, err := o.NewServer(p.Name, p.Version, p.Tools...)
+		opts := o
+		if opts.Instructions == "" {
+			opts.Instructions = p.Description
+		}
+		srv, err := opts.NewServer(p.Name, p.Version, p.Tools...)
 		if err != nil {
 			fmt.Fprintf(p.Stderr, "%s: %v\n", p.Name, err)
 			return cli.ExitUsage

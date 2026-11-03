@@ -13,6 +13,13 @@ versions may break the API.
   It now requires v0.0.29, and a test serves a claiming tool to a
   client dialling with `mcpclient.WithClaims()`, so a selection that
   falls below v0.0.20 fails.
+- Added: the `mcp` command serves the bundle's description as the
+  server's instructions, the text the skill's frontmatter carries, so
+  an MCP client finds the same guidance a model reading the skill does
+  (#5). Before, the server gave none, and a client such as Claude Code
+  found the tools by their names alone. `mcpserver.Options.Instructions`
+  given to `mcp.CommandWith` wins. `Program.Description` carries the
+  description to a command.
 - Dependencies: agenttool, agenttool/mcpserver and agenttool/mcpclient
   (a test-only dependency of `mcp`) v0.0.29, agentskill v0.0.12 and
   openresponses v0.0.17. The usage `cli` renders, and so the skill,

@@ -152,6 +152,10 @@ file-tools export-skill ~/.claude/skills      # a host that does not
   may call but not list. Questions are elicitations, progress is
   notifications and records are `_meta`, as from any server built on
   `mcpserver`.
+- The server's instructions are the bundle's description, the text
+  the skill's frontmatter carries, so a client finds the same guidance
+  either way. agenttool says the serving host supplies them; this is
+  the bundle's choice of what to supply.
 - It serves facts and replay to a client that dials with
   `mcpclient.WithClaims()`, so a tool's facts claim reaches the
   client's policy as it would in process; that needs mcpserver ≥
@@ -166,7 +170,7 @@ file-tools export-skill ~/.claude/skills      # a host that does not
   through the skill and the server through the host's MCP
   configuration, and a host uses one or the other.
 - `mcp.CommandWith(mcpserver.Options{…})` passes options to the
-  server.
+  server. Its `Instructions`, when set, replace the description.
 
 ## What pre-approval grants in Claude Code
 

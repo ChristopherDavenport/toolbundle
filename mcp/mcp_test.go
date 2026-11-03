@@ -20,6 +20,7 @@ import (
 	"github.com/ChristopherDavenport/agenttool"
 	"github.com/ChristopherDavenport/agenttool/cli"
 	"github.com/ChristopherDavenport/agenttool/mcpclient"
+	"github.com/ChristopherDavenport/agenttool/mcpserver"
 	"github.com/ChristopherDavenport/toolbundle"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -122,6 +123,9 @@ func TestServe(t *testing.T) {
 
 	if info := cs.InitializeResult().ServerInfo; info.Name != "counter" || info.Version != "v1.2.3" {
 		t.Errorf("server is %s %s, want counter v1.2.3", info.Name, info.Version)
+	}
+	if got, want := cs.InitializeResult().Instructions, counter().Description; got != want {
+		t.Errorf("instructions %q, want the bundle's description %q", got, want)
 	}
 
 	tools, err := cs.ListTools(context.Background(), nil)
@@ -305,5 +309,32 @@ func TestServeFacts(t *testing.T) {
 	wantJSON, _ := json.Marshal(want)
 	if !bytes.Equal(gotJSON, wantJSON) {
 		t.Errorf("facts over MCP %s, want %s as in process", gotJSON, wantJSON)
+	}
+}
+
+// The server's instructions are the bundle's description, unless the
+// caller gives its own.
+func TestInstructions(t *testing.T) {
+	const description = "Count calls. Use when a task needs counting."
+	tests := []struct {
+		name string
+		cmd  toolbundle.Command
+		want string
+	}{
+		{"the bundle's description", Command(), description},
+		{"the caller's own", CommandWith(mcpserver.Options{Instructions: "Call count to count."}), "Call count to count."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := toolbundle.Program{Name: "counter", Version: "v1.2.3", Description: description}
+			remote, err := mcpclient.Connect(context.Background(), inMemory(t, tt.cmd, p))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { remote.Close() })
+			if got := remote.Instructions(); got != tt.want {
+				t.Errorf("instructions %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
