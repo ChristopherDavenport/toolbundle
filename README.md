@@ -183,7 +183,9 @@ file-tools export-skill ~/.claude/skills      # a host that does not
   through the skill and the server through the host's MCP
   configuration, and a host uses one or the other.
 - `mcp.CommandWith(mcpserver.Options{…})` passes options to the
-  server. Its `Instructions`, when set, replace the description.
+  server. Its `Instructions`, when set, replace the description. An
+  empty `Instructions` means the description; a bundle that wants a
+  server without instructions writes its own `toolbundle.Command`.
 
 ## What pre-approval grants in Claude Code
 

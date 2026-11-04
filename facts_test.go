@@ -114,12 +114,24 @@ func TestFactsMarked(t *testing.T) {
 	if r.status != cli.ExitOK {
 		t.Fatalf("status %d: %s", r.status, r.stderr)
 	}
+	var read, count bool
 	for _, line := range strings.Split(r.stdout, "\n") {
 		switch {
-		case strings.Contains(line, "`note_read`") && !strings.Contains(line, "Makes a facts claim."):
-			t.Errorf("note_read is not marked: %q", line)
-		case strings.Contains(line, "`note_count`") && strings.Contains(line, "facts"):
-			t.Errorf("note_count is marked: %q", line)
+		case strings.Contains(line, "`note_read`"):
+			read = true
+			if !strings.Contains(line, "Makes a facts claim.") {
+				t.Errorf("note_read is not marked: %q", line)
+			}
+		case strings.Contains(line, "`note_count`"):
+			count = true
+			if strings.Contains(line, "facts") {
+				t.Errorf("note_count is marked: %q", line)
+			}
+		case strings.Contains(line, "note_purge"):
+			t.Errorf("help lists the hidden note_purge: %q", line)
 		}
+	}
+	if !read || !count {
+		t.Errorf("help lists note_read %v, note_count %v; want both:\n%s", read, count, r.stdout)
 	}
 }
