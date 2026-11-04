@@ -3,8 +3,10 @@ package mcp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -17,6 +19,8 @@ import (
 
 	"github.com/ChristopherDavenport/agenttool"
 	"github.com/ChristopherDavenport/agenttool/cli"
+	"github.com/ChristopherDavenport/agenttool/mcpclient"
+	"github.com/ChristopherDavenport/agenttool/mcpserver"
 	"github.com/ChristopherDavenport/toolbundle"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -120,6 +124,9 @@ func TestServe(t *testing.T) {
 	if info := cs.InitializeResult().ServerInfo; info.Name != "counter" || info.Version != "v1.2.3" {
 		t.Errorf("server is %s %s, want counter v1.2.3", info.Name, info.Version)
 	}
+	if got, want := cs.InitializeResult().Instructions, counter().Description; got != want {
+		t.Errorf("instructions %q, want the bundle's description %q", got, want)
+	}
 
 	tools, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
@@ -221,5 +228,113 @@ func TestRefusesThroughMain(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "counter: mcp takes no arguments") {
 		t.Errorf("stderr %q", stderr)
+	}
+}
+
+// inMemory runs cmd for p on pipes in place of the program's standard
+// streams, and returns the client's end of them. The command runs until
+// the client closes its end; the test then checks that it exited with
+// cli.ExitOK.
+func inMemory(t *testing.T, cmd toolbundle.Command, p toolbundle.Program) sdk.Transport {
+	t.Helper()
+	inR, inW := io.Pipe()
+	outR, outW := io.Pipe()
+	p.Stdin, p.Stdout, p.Stderr = inR, outW, io.Discard
+	done := make(chan int, 1)
+	go func() {
+		status := cmd.Run(context.Background(), p, nil)
+		outW.Close()
+		done <- status
+	}()
+	t.Cleanup(func() {
+		inW.Close()
+		select {
+		case status := <-done:
+			if status != cli.ExitOK {
+				t.Errorf("the command exited %d", status)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("the command did not end when the client closed")
+		}
+	})
+	return &sdk.IOTransport{Reader: outR, Writer: inW}
+}
+
+// noteRead is a tool that claims facts: the note file a call reads.
+func noteRead() agenttool.Tool {
+	type nameArgs struct {
+		Name string `json:"name" desc:"The note's name"`
+	}
+	return agenttool.New("note_read", "Read a note.",
+		func(ctx context.Context, a nameArgs) (string, error) { return "read " + a.Name, nil },
+		agenttool.WithAnnotations(agenttool.Annotations{ReadOnly: true}),
+		agenttool.WithFacts(func(_ context.Context, args json.RawMessage) (agenttool.Facts, error) {
+			a, err := agenttool.Decode[nameArgs](args)
+			if err != nil {
+				return agenttool.Facts{}, err
+			}
+			path, _ := json.Marshal(map[string]string{"path": ".notes/" + a.Name + ".json"})
+			return agenttool.Facts{Calls: []agenttool.FactCall{{Tool: "read", Args: path, Text: "read .notes/" + a.Name + ".json"}}}, nil
+		}))
+}
+
+// A client that takes the server's claims finds a served tool's facts
+// claim, and is answered what the tool answers in process. mcpserver
+// serves the claim from v0.0.20; this fails if what the module selects
+// falls below it.
+func TestServeFacts(t *testing.T) {
+	ctx := context.Background()
+	local := noteRead()
+	p := toolbundle.Program{Name: "notes", Version: "v1.2.3", Tools: agenttool.Set{local}}
+	remote, err := mcpclient.Connect(ctx, inMemory(t, Command(), p), mcpclient.WithClaims())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { remote.Close() })
+
+	tools := remote.Tools()
+	if len(tools) != 1 {
+		t.Fatalf("tools %v, want note_read", tools)
+	}
+	if !agenttool.IsFactual(tools[0]) {
+		t.Fatal("the served note_read makes no facts claim")
+	}
+	args := json.RawMessage(`{"name":"hr-review"}`)
+	got, claims, err := agenttool.FactsOf(ctx, tools[0], args)
+	if err != nil || !claims {
+		t.Fatalf("facts: claims %v, err %v", claims, err)
+	}
+	want, _, _ := agenttool.FactsOf(ctx, local, args)
+	gotJSON, _ := json.Marshal(got)
+	wantJSON, _ := json.Marshal(want)
+	if !bytes.Equal(gotJSON, wantJSON) {
+		t.Errorf("facts over MCP %s, want %s as in process", gotJSON, wantJSON)
+	}
+}
+
+// The server's instructions are the bundle's description, unless the
+// caller gives its own.
+func TestInstructions(t *testing.T) {
+	const description = "Count calls. Use when a task needs counting."
+	tests := []struct {
+		name string
+		cmd  toolbundle.Command
+		want string
+	}{
+		{"the bundle's description", Command(), description},
+		{"the caller's own", CommandWith(mcpserver.Options{Instructions: "Call count to count."}), "Call count to count."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := toolbundle.Program{Name: "counter", Version: "v1.2.3", Description: description}
+			remote, err := mcpclient.Connect(context.Background(), inMemory(t, tt.cmd, p))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { remote.Close() })
+			if got := remote.Instructions(); got != tt.want {
+				t.Errorf("instructions %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

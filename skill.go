@@ -191,10 +191,15 @@ func writeSkill(path string, data []byte, force bool) error {
 
 // warnings names each tool that looks as if it keeps state across
 // calls, which one call per process loses, unless its author said so
-// with Stateful.
+// with Stateful, and each pre-approved tool that makes the facts claim,
+// whose calls allowed-tools allows by name, never on what they touch.
 func (b Bundle) warnings() []string {
 	var out []string
 	for _, t := range b.Tools {
+		if t.preApproved && !t.hidden && agenttool.IsFactual(t.tool) {
+			out = append(out, fmt.Sprintf("%s is pre-approved and makes a facts claim, but allowed-tools grants its command by name, so a host that honours it runs every call without deciding it on what the call touches; leave PreApproved off if a policy should decide its calls",
+				t.tool.Name()))
+		}
 		if t.stateful {
 			continue
 		}

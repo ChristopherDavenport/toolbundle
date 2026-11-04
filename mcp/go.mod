@@ -10,14 +10,15 @@ go 1.25.0
 require github.com/ChristopherDavenport/toolbundle v0.0.2
 
 require (
-	github.com/ChristopherDavenport/agenttool v0.0.18
-	github.com/ChristopherDavenport/agenttool/mcpserver v0.0.18
+	github.com/ChristopherDavenport/agenttool v0.0.29
+	github.com/ChristopherDavenport/agenttool/mcpclient v0.0.29
+	github.com/ChristopherDavenport/agenttool/mcpserver v0.0.29
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 )
 
 require (
-	github.com/ChristopherDavenport/agentskill v0.0.11 // indirect
-	github.com/ChristopherDavenport/openresponses v0.0.14 // indirect
+	github.com/ChristopherDavenport/agentskill v0.0.12 // indirect
+	github.com/ChristopherDavenport/openresponses v0.0.17 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect

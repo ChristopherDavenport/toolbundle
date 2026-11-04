@@ -18,13 +18,15 @@ import (
 )
 
 // The program's own commands, recognised only as the first argument.
-// help and schema are cli's; a tool may be named as none of them.
+// help, schema and facts are cli's; a tool may be named as none of
+// them.
 const (
 	cmdExportSkill = "export-skill"
 	cmdVersion     = "version"
+	cmdFacts       = "facts"
 )
 
-var reserved = []string{cmdExportSkill, cmdVersion, "help", "schema"}
+var reserved = []string{cmdExportSkill, cmdVersion, "help", "schema", cmdFacts}
 
 // Main runs the program the bundle describes with args, the command
 // line with the program's name first as in [os.Args], and returns the
@@ -34,11 +36,15 @@ var reserved = []string{cmdExportSkill, cmdVersion, "help", "schema"}
 //	<name> version
 //	<name> <command of Bundle.Commands> [<arg>]...
 //	<name> [--ask] <cli.Runner's command line>
+//	<name> facts <cli.Runner's command line>
 //
 // export-skill writes the skill to <dir>/<name>/SKILL.md, version
 // prints the version, and a [Command] of the bundle's runs with the
 // words after its name. Anything else is one call of one tool, run by
-// [cli.Runner] with the exit statuses it documents. --ask, given first,
+// [cli.Runner] with the exit statuses it documents. facts is cli's,
+// [cli.Runner.Facts]: it prints what the call the rest of the line
+// gives would touch, as the tool claims it, without running the tool.
+// A hidden tool answers it, as it runs, by name. --ask, given first,
 // asks a person at the terminal any question a tool asks, through
 // [cli.Prompt]; without it a question takes cli's protocol for a
 // model: the call ends with [cli.ExitNeedsAnswer] and the question on
@@ -87,7 +93,7 @@ func (b Bundle) main(ctx context.Context, args []string, stdin io.Reader, stdout
 		}
 		for _, c := range b.Commands {
 			if c.Name == args[0] {
-				p := Program{Name: b.Name, Version: b.version(), Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
+				p := Program{Name: b.Name, Version: b.version(), Description: b.Description, Tools: b.visible(), Stdin: stdin, Stdout: stdout, Stderr: stderr}
 				return c.Run(ctx, p, args[1:])
 			}
 		}
@@ -204,18 +210,29 @@ func (b Bundle) version() string {
 
 // command is the command a cli.Runner command line names, after the
 // program options cli reads before it, or "" when it names none or
-// the options do not parse. It decides only whether the runner is
-// given the hidden tools; the runner parses the line itself, so an
-// option cli adds later costs a hidden tool its reach behind that
-// option and nothing else.
+// the options do not parse. For a facts line it is the command whose
+// facts are asked, after the options cli reads there too. It decides
+// only whether the runner is given the hidden tools; the runner parses
+// the line itself, so an option cli adds later costs a hidden tool its
+// reach behind that option and nothing else.
 func command(args []string) string {
+	name, rest := commandOf(args)
+	if name == cmdFacts {
+		name, _ = commandOf(rest)
+	}
+	return name
+}
+
+// commandOf is the first word of args after cli's program options, and
+// the words after it.
+func commandOf(args []string) (string, []string) {
 	fs := flag.NewFlagSet("", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Func("answer", "", func(string) error { return nil })
 	fs.String("record", "", "")
 	fs.String("out", "", "")
 	if fs.Parse(args) != nil || fs.NArg() == 0 {
-		return ""
+		return "", nil
 	}
-	return fs.Arg(0)
+	return fs.Arg(0), fs.Args()[1:]
 }

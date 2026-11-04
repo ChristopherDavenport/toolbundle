@@ -3,7 +3,7 @@ name: file-tools
 description: Read, search and write files in the working tree. Use when a task needs the contents of a file or a change to one.
 allowed-tools: Bash(file-tools read_file *) Bash(file-tools search *)
 metadata:
-  digest: 48e039a6c399a63d481d5b66c1ac53a727158b33f2372868495ce5ed8458e3ac
+  digest: 6951a1e0b0198fd92f0f25b6406091498c6f19653054c655482c471e8c9d5acc
   version: v1.2.3
 ---
 
@@ -40,9 +40,10 @@ The exit status says what happened:
 - 0: the command succeeded, and its output is on stdout. If stderr says the output could not be written, the command still ran: do not run it again for that.
 - 1: the tool failed or refused the arguments, and says why on stderr. Correct the call and run it again.
 - 2: the command did not run, because the command line was not understood or the program could not start it, and stderr says why.
-- 3: the tool asked the user a question that nobody answered, and was told it was cancelled. Stdout holds the question as JSON, with what the tool returned. Ask the user, then run the same command again with `--answer` before the command name: `--answer accept`, `--answer decline`, or `--answer '{...}'` with the fields a form asks for. A command that asks again needs every earlier answer again, in the order given.
+- 3: the tool asked the user a question that nobody answered, and was told it was cancelled. Stdout holds the question as JSON, with what the tool returned; its `schema` is the form it asks for, and null when it asks only yes or no. Ask the user, then run the same command again with `--answer` before the command name: `--answer accept`, `--answer decline`, `--answer '{...}'` with the fields the form defines and no others, or `--answer '{"action": "decline", "note": "..."}'` to pass on what the user said with their answer, with `"content"` holding the form's fields on an accept. A command that asks again needs every earlier answer again, in the order given.
+- 4: an `--answer` did not answer its question: it gave a field the question's schema does not define, or a value it refuses. The command ran, and the tool was told the answer could not be given and may have acted. Stdout holds the question as JSON with `refused`, why, and what the tool returned. Check what it did before running the command again with an answer that fits.
 
-A file a command produces, such as an image, is written to disk and its path printed. `file-tools help <command>` prints one command's usage and `file-tools schema <command>` its JSON Schema.
+A file a command produces, such as an image, is written to disk and its path printed. `file-tools help <command>` prints one command's usage and `file-tools schema <command>` its JSON Schema. `file-tools facts <command> ...`, with the command line you would run, prints as JSON what that call would touch, without running it, for a command that makes a facts claim.
 
 ## Commands
 
@@ -95,6 +96,8 @@ file-tools search --pattern 'func [A-Z]' --paths cmd --paths internal
 Write a file in the working tree.
 
 Hints from the tool: may be destructive.
+
+Makes a facts claim. `file-tools facts write_file ...`, with the rest of the command line, prints what the call would touch without running it.
 
 ```sh
 file-tools write_file --path <string> --content <string>

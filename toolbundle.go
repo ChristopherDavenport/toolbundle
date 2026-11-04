@@ -87,6 +87,9 @@ type Program struct {
 	// Version is the bundle's version, or the main module's when it
 	// sets none, as the version command prints it.
 	Version string
+	// Description is the bundle's description, the text the skill's
+	// frontmatter carries.
+	Description string
 	// Tools are the tools the skill shows, the hidden ones left out.
 	// The program closes them after the command returns.
 	Tools agenttool.Set
